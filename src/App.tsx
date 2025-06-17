@@ -20,6 +20,7 @@ function Player({ position, onPositionChange }: { position: [number, number, num
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      console.log('Key down:', event.code);
       switch (event.code) {
         case 'KeyW':
           keys.current.w = true;
@@ -79,15 +80,19 @@ function Player({ position, onPositionChange }: { position: [number, number, num
     let newPosition = [...playerPosition] as [number, number, number];
 
     if (keys.current.w) {
+      console.log('W key pressed - moving forward');
       newPosition[2] -= speed * delta;
     }
     if (keys.current.s) {
+      console.log('S key pressed - moving backward');
       newPosition[2] += speed * delta;
     }
     if (keys.current.a) {
+      console.log('A key pressed - moving left');
       newPosition[0] -= speed * delta;
     }
     if (keys.current.d) {
+      console.log('D key pressed - moving right');
       newPosition[0] += speed * delta;
     }
 
@@ -149,10 +154,17 @@ function Collectible({ position, onCollect }: { position: [number, number, numbe
 function GroundShader({ playerPosition }: { playerPosition: [number, number, number] }) {
   const meshRef = useRef<THREE.Mesh>(null!);
   
+  console.log('GroundShader received playerPosition:', playerPosition);
+  
   useFrame(() => {
     if (meshRef.current && meshRef.current.material) {
       const material = meshRef.current.material as THREE.ShaderMaterial;
+      console.log('Player position:', playerPosition);
+      console.log('Setting uniform to:', playerPosition[0], playerPosition[1], playerPosition[2]);
       material.uniforms.playerPos.value.set(playerPosition[0], playerPosition[1], playerPosition[2]);
+      console.log('Uniform value after set:', material.uniforms.playerPos.value);
+    } else {
+      console.log('No mesh or material found');
     }
   });
 
@@ -178,25 +190,22 @@ function GroundShader({ playerPosition }: { playerPosition: [number, number, num
             float x = vWorldPosition.x;
             float z = vWorldPosition.z;
             
-            // Create color based on world position and player position
+            // Create dramatic color based on player position
             vec3 color = vec3(
-              0.5 + 0.5 * sin(x * 0.3 + playerPos.x * 0.5),
-              0.5 + 0.5 * sin(z * 0.3 + playerPos.z * 0.5),
-              0.5 + 0.5 * sin((x + z) * 0.2 + (playerPos.x + playerPos.z) * 0.3)
+              0.5 + 0.5 * sin(playerPos.x * 2.0),
+              0.5 + 0.5 * sin(playerPos.z * 2.0),
+              0.5 + 0.5 * sin((playerPos.x + playerPos.z) * 1.0)
             );
             
-            // Add some variation based on distance from player
-            float distanceFromPlayer = length(vec2(x - playerPos.x, z - playerPos.z));
-            float influence = exp(-distanceFromPlayer * 0.1);
-            
-            // Mix in player influence colors
-            vec3 playerColor = vec3(
-              0.8 + 0.2 * sin(playerPos.x * 2.0),
-              0.2 + 0.8 * sin(playerPos.z * 2.0),
-              0.5 + 0.5 * cos(playerPos.x * playerPos.z * 0.1)
+            // Add world position influence
+            color += vec3(
+              0.3 * sin(x * 0.5 + playerPos.x * 3.0),
+              0.3 * sin(z * 0.5 + playerPos.z * 3.0),
+              0.3 * sin((x + z) * 0.3 + (playerPos.x - playerPos.z) * 2.0)
             );
             
-            color = mix(color, playerColor, influence * 0.5);
+            // Clamp to valid range
+            color = clamp(color, 0.0, 1.0);
             
             gl_FragColor = vec4(color, 1.0);
           }
@@ -220,6 +229,11 @@ function Game() {
     setScore(prev => prev + 10);
   };
 
+  const handlePlayerPositionChange = (pos: [number, number, number]) => {
+    console.log('Player position changed to:', pos);
+    setPlayerPosition(pos);
+  };
+
   return (
     <>
       <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, color: 'white', fontSize: '20px' }}>
@@ -229,7 +243,7 @@ function Game() {
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} />
         
-        <Player position={[0, 0, 0]} onPositionChange={setPlayerPosition} />
+        <Player position={[0, 0, 0]} onPositionChange={handlePlayerPositionChange} />
         
         {collectibles.map(collectible => (
           <Collectible 
