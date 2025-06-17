@@ -1,6 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import './App.css';
 
@@ -26,18 +25,21 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles, onHeight
   const [playerHeight, setPlayerHeight] = useState(0.5);
 
   const isPositionBlocked = (pos: [number, number]) => {
+    // Only block positions outside the grid boundaries (walls)
+    // Allow movement onto mushroom positions since we can land on top of them
     if (pos[0] < 0 || pos[0] >= GRID_SIZE || pos[1] < 0 || pos[1] >= GRID_SIZE) {
       return true;
     }
-    return obstacles.some(obstacle => obstacle[0] === pos[0] && obstacle[1] === pos[1]);
+    return false;
   };
 
-  const isOnMushroom = (pos: [number, number]) => {
+  const isOnMushroom = useCallback((pos: [number, number]) => {
     return obstacles.some(obstacle => obstacle[0] === pos[0] && obstacle[1] === pos[1]);
-  };
+  }, [obstacles]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Block movement only when falling (not when jumping)
       if (isFalling) return;
       
       let newGridPos = [...currentGridPos] as [number, number];
@@ -88,7 +90,7 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles, onHeight
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentGridPos, isFalling, onMove, onRotate, obstacles, facingDirection, isJumping, playerHeight]);
+  }, [currentGridPos, isFalling, onMove, onRotate, obstacles, facingDirection, isJumping, playerHeight, fallSpeed, isOnMushroom]);
 
   const getFacingDirectionDelta = (direction: number): [number, number] => {
     switch (direction) {
@@ -109,20 +111,42 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles, onHeight
     const newX = currentX + (targetX - currentX) * speed * delta;
     const newZ = currentZ + (targetZ - currentZ) * speed * delta;
     
-    // Handle jumping physics
+    // Determine the correct ground level for current position
+    const onMushroom = isOnMushroom(currentGridPos);
+    const groundLevel = onMushroom ? 1.0 : 0.5; // Mushroom height is 0.5, so player stands at 1.0
+    
     let newHeight = playerHeight;
+    
     if (isJumping) {
+      // Handle jumping physics
       newHeight += jumpVelocity * delta;
       setJumpVelocity(prev => prev - 20 * delta); // Gravity
       
-      // Check if landing on mushroom or ground
-      const onMushroom = isOnMushroom(currentGridPos);
-      const landingHeight = onMushroom ? 1.0 : 0.5; // Mushroom height is 0.5, so player lands at 1.0
-      
-      if (newHeight <= landingHeight) {
-        newHeight = landingHeight;
+      // Check if landing
+      if (newHeight <= groundLevel) {
+        newHeight = groundLevel;
         setIsJumping(false);
         setJumpVelocity(0);
+      }
+    } else {
+      // Handle falling when not jumping (e.g., walking off a mushroom)
+      if (newHeight > groundLevel) {
+        // Player is above ground level, make them fall
+        setIsFalling(true);
+        newHeight += fallSpeed * delta;
+        setFallSpeed(prev => prev - 20 * delta); // Gravity
+        
+        // Check if landed
+        if (newHeight <= groundLevel) {
+          newHeight = groundLevel;
+          setIsFalling(false);
+          setFallSpeed(0);
+        }
+      } else if (newHeight < groundLevel) {
+        // Player is below ground level, lift them up (e.g., stepping onto mushroom)
+        newHeight = groundLevel;
+        setIsFalling(false);
+        setFallSpeed(0);
       }
     }
     
