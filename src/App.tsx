@@ -7,7 +7,7 @@ import './App.css';
 const GRID_SIZE = 10;
 const CELL_SIZE = 1;
 
-function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void, onRotate: (direction: number) => void, obstacles: [number, number][] }) {
+function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles, onHeightChange }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void, onRotate: (direction: number) => void, obstacles: [number, number][], onHeightChange: (height: number) => void }) {
   const { camera } = useThree();
   const [currentGridPos, setCurrentGridPos] = useState(gridPosition);
   
@@ -21,11 +21,18 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
   const [isFalling, setIsFalling] = useState(false);
   const [fallSpeed, setFallSpeed] = useState(0);
   const [facingDirection, setFacingDirection] = useState(0); // 0=north, 1=east, 2=south, 3=west
+  const [isJumping, setIsJumping] = useState(false);
+  const [jumpVelocity, setJumpVelocity] = useState(0);
+  const [playerHeight, setPlayerHeight] = useState(0.5);
 
   const isPositionBlocked = (pos: [number, number]) => {
     if (pos[0] < 0 || pos[0] >= GRID_SIZE || pos[1] < 0 || pos[1] >= GRID_SIZE) {
       return true;
     }
+    return obstacles.some(obstacle => obstacle[0] === pos[0] && obstacle[1] === pos[1]);
+  };
+
+  const isOnMushroom = (pos: [number, number]) => {
     return obstacles.some(obstacle => obstacle[0] === pos[0] && obstacle[1] === pos[1]);
   };
 
@@ -63,6 +70,14 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
             return newDirection;
           });
           break;
+        case 'Space': // Jump
+          const onMushroom = isOnMushroom(currentGridPos);
+          const groundLevel = onMushroom ? 1.0 : 0.5;
+          if (!isJumping && Math.abs(playerHeight - groundLevel) < 0.1) {
+            setIsJumping(true);
+            setJumpVelocity(8);
+          }
+          break;
       }
       
       if (moved && !isPositionBlocked(newGridPos)) {
@@ -73,7 +88,7 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentGridPos, isFalling, onMove, onRotate, obstacles, facingDirection]);
+  }, [currentGridPos, isFalling, onMove, onRotate, obstacles, facingDirection, isJumping, playerHeight]);
 
   const getFacingDirectionDelta = (direction: number): [number, number] => {
     switch (direction) {
@@ -94,10 +109,29 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
     const newX = currentX + (targetX - currentX) * speed * delta;
     const newZ = currentZ + (targetZ - currentZ) * speed * delta;
     
-    const newPosition: [number, number, number] = [newX, 0.5, newZ];
+    // Handle jumping physics
+    let newHeight = playerHeight;
+    if (isJumping) {
+      newHeight += jumpVelocity * delta;
+      setJumpVelocity(prev => prev - 20 * delta); // Gravity
+      
+      // Check if landing on mushroom or ground
+      const onMushroom = isOnMushroom(currentGridPos);
+      const landingHeight = onMushroom ? 1.0 : 0.5; // Mushroom height is 0.5, so player lands at 1.0
+      
+      if (newHeight <= landingHeight) {
+        newHeight = landingHeight;
+        setIsJumping(false);
+        setJumpVelocity(0);
+      }
+    }
+    
+    setPlayerHeight(newHeight);
+    onHeightChange(newHeight);
+    const newPosition: [number, number, number] = [newX, newHeight, newZ];
     setWorldPosition(newPosition);
     
-    camera.position.set(newX, 0.5, newZ);
+    camera.position.set(newX, newHeight, newZ);
     camera.rotation.y = facingDirection * Math.PI / 2;
   });
 
@@ -117,7 +151,7 @@ function MushroomObstacle({ gridPosition }: { gridPosition: [number, number] }) 
   );
 }
 
-function Grid() {
+function Grid({ playerHeight }: { playerHeight: number }) {
   const texture = useLoader(THREE.TextureLoader, './texture.png');
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(4, 4);
@@ -146,6 +180,10 @@ function Grid() {
   const wallThickness = 0.2;
   const halfGrid = GRID_SIZE * CELL_SIZE / 2;
   
+  // Calculate wall offset based on player height to create illusion of jumping higher
+  const jumpHeightOffset = Math.max(0, (playerHeight - 0.5) * 0.3);
+  const wallY = wallHeight / 2 - jumpHeightOffset;
+  
   return (
     <>
       <mesh position={[0, 0, 0]}>
@@ -154,22 +192,22 @@ function Grid() {
       </mesh>
       {gridLines}
       
-      <mesh position={[0, wallHeight/2, halfGrid]}>
+      <mesh position={[0, wallY, halfGrid]}>
         <boxGeometry args={[GRID_SIZE * CELL_SIZE, wallHeight, wallThickness]} />
         <meshStandardMaterial map={texture} />
       </mesh>
       
-      <mesh position={[0, wallHeight/2, -halfGrid]}>
+      <mesh position={[0, wallY, -halfGrid]}>
         <boxGeometry args={[GRID_SIZE * CELL_SIZE, wallHeight, wallThickness]} />
         <meshStandardMaterial map={texture} />
       </mesh>
       
-      <mesh position={[halfGrid, wallHeight/2, 0]}>
+      <mesh position={[halfGrid, wallY, 0]}>
         <boxGeometry args={[wallThickness, wallHeight, GRID_SIZE * CELL_SIZE]} />
         <meshStandardMaterial map={texture} />
       </mesh>
       
-      <mesh position={[-halfGrid, wallHeight/2, 0]}>
+      <mesh position={[-halfGrid, wallY, 0]}>
         <boxGeometry args={[wallThickness, wallHeight, GRID_SIZE * CELL_SIZE]} />
         <meshStandardMaterial map={texture} />
       </mesh>
@@ -261,6 +299,7 @@ function MiniMap({ playerPos, playerDirection, obstacles }: { playerPos: [number
 function Game() {
   const [playerGridPos, setPlayerGridPos] = useState<[number, number]>([5, 5]);
   const [playerDirection, setPlayerDirection] = useState(0);
+  const [playerHeight, setPlayerHeight] = useState(0.5);
   
   const obstacles = [
     [2, 3], [7, 1], [4, 6], [8, 8], [1, 7], [6, 2], [3, 9], [9, 4]
@@ -274,18 +313,23 @@ function Game() {
     setPlayerDirection(direction);
   };
 
+  const handlePlayerHeightChange = (height: number) => {
+    setPlayerHeight(height);
+  };
+
   return (
     <>
       <Canvas camera={{ position: [5, 0.5, 5], fov: 75 }}>
         <ambientLight intensity={0.6} />
         <directionalLight position={[10, 10, 10]} intensity={0.8} />
         
-        <Grid />
+        <Grid playerHeight={playerHeight} />
         
         <FirstPersonPlayer 
           gridPosition={playerGridPos} 
           onMove={handlePlayerMove} 
           onRotate={handlePlayerRotate}
+          onHeightChange={handlePlayerHeightChange}
           obstacles={obstacles} 
         />
         
