@@ -104,14 +104,15 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
   return null;
 }
 
-function RedObstacle({ gridPosition }: { gridPosition: [number, number] }) {
+function MushroomObstacle({ gridPosition }: { gridPosition: [number, number] }) {
+  const texture = useLoader(THREE.TextureLoader, './mush.png');
   const worldX = (gridPosition[0] - (GRID_SIZE - 1) / 2) * CELL_SIZE;
   const worldZ = (gridPosition[1] - (GRID_SIZE - 1) / 2) * CELL_SIZE;
   
   return (
     <mesh position={[worldX, 0.25, worldZ]}>
       <boxGeometry args={[0.8, 0.5, 0.8]} />
-      <meshStandardMaterial color="#ff0000" />
+      <meshStandardMaterial map={texture} />
     </mesh>
   );
 }
@@ -289,7 +290,7 @@ function Game() {
         />
         
         {obstacles.map((obstaclePos, index) => (
-          <RedObstacle key={index} gridPosition={obstaclePos} />
+          <MushroomObstacle key={index} gridPosition={obstaclePos} />
         ))}
         
       </Canvas>
