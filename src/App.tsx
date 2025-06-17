@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import './App.css';
@@ -7,19 +7,17 @@ import './App.css';
 const GRID_SIZE = 10;
 const CELL_SIZE = 1;
 
-function GreenTubePlayer({ gridPosition, onMove }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void }) {
-  const meshRef = useRef<THREE.Mesh>(null!);
+function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void, obstacles: [number, number][] }) {
+  const { camera } = useThree();
   const [currentGridPos, setCurrentGridPos] = useState(gridPosition);
-  const [worldPosition, setWorldPosition] = useState<[number, number, number]>([gridPosition[0] * CELL_SIZE, 5, gridPosition[1] * CELL_SIZE]);
-  const [isFalling, setIsFalling] = useState(true);
+  const [worldPosition, setWorldPosition] = useState<[number, number, number]>([gridPosition[0] * CELL_SIZE, 0.5, gridPosition[1] * CELL_SIZE]);
+  const [isFalling, setIsFalling] = useState(false);
   const [fallSpeed, setFallSpeed] = useState(0);
 
-  const keys = useRef({
-    w: false,
-    a: false,
-    s: false,
-    d: false
-  });
+
+  const isPositionBlocked = (pos: [number, number]) => {
+    return obstacles.some(obstacle => obstacle[0] === pos[0] && obstacle[1] === pos[1]);
+  };
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -55,7 +53,7 @@ function GreenTubePlayer({ gridPosition, onMove }: { gridPosition: [number, numb
           break;
       }
       
-      if (moved) {
+      if (moved && !isPositionBlocked(newGridPos)) {
         setCurrentGridPos(newGridPos);
         onMove(newGridPos);
       }
@@ -63,46 +61,25 @@ function GreenTubePlayer({ gridPosition, onMove }: { gridPosition: [number, numb
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentGridPos, isFalling, onMove]);
+  }, [currentGridPos, isFalling, onMove, obstacles, isPositionBlocked]);
 
   useFrame((state, delta) => {
-    if (isFalling) {
-      const gravity = 8;
-      const newFallSpeed = fallSpeed + gravity * delta;
-      const newY = worldPosition[1] - newFallSpeed * delta;
-      
-      if (newY <= 0.5) {
-        setWorldPosition([currentGridPos[0] * CELL_SIZE, 0.5, currentGridPos[1] * CELL_SIZE]);
-        setIsFalling(false);
-        setFallSpeed(0);
-      } else {
-        setWorldPosition([currentGridPos[0] * CELL_SIZE, newY, currentGridPos[1] * CELL_SIZE]);
-        setFallSpeed(newFallSpeed);
-      }
-    } else {
-      const targetX = currentGridPos[0] * CELL_SIZE;
-      const targetZ = currentGridPos[1] * CELL_SIZE;
-      const currentX = worldPosition[0];
-      const currentZ = worldPosition[2];
-      
-      const speed = 5;
-      const newX = currentX + (targetX - currentX) * speed * delta;
-      const newZ = currentZ + (targetZ - currentZ) * speed * delta;
-      
-      setWorldPosition([newX, 0.5, newZ]);
-    }
+    const targetX = currentGridPos[0] * CELL_SIZE;
+    const targetZ = currentGridPos[1] * CELL_SIZE;
+    const currentX = worldPosition[0];
+    const currentZ = worldPosition[2];
     
-    if (meshRef.current) {
-      meshRef.current.position.set(worldPosition[0], worldPosition[1], worldPosition[2]);
-    }
+    const speed = 5;
+    const newX = currentX + (targetX - currentX) * speed * delta;
+    const newZ = currentZ + (targetZ - currentZ) * speed * delta;
+    
+    const newPosition: [number, number, number] = [newX, 0.5, newZ];
+    setWorldPosition(newPosition);
+    
+    camera.position.set(newX, 0.5, newZ);
   });
 
-  return (
-    <mesh ref={meshRef} position={worldPosition}>
-      <cylinderGeometry args={[0.3, 0.3, 1, 8]} />
-      <meshStandardMaterial color="#00ff00" />
-    </mesh>
-  );
+  return null;
 }
 
 function RedObstacle({ gridPosition }: { gridPosition: [number, number] }) {
@@ -161,30 +138,18 @@ function Game() {
   };
 
   return (
-    <Canvas camera={{ position: [6.51, 1.50, 9.13], fov: 60 }}>
+    <Canvas camera={{ position: [5, 0.5, 5], fov: 75 }}>
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 10, 10]} intensity={0.8} />
       
       <Grid />
       
-      <GreenTubePlayer gridPosition={playerGridPos} onMove={handlePlayerMove} />
+      <FirstPersonPlayer gridPosition={playerGridPos} onMove={handlePlayerMove} obstacles={obstacles} />
       
       {obstacles.map((obstaclePos, index) => (
         <RedObstacle key={index} gridPosition={obstaclePos} />
       ))}
       
-      <OrbitControls 
-        enablePan={true} 
-        enableZoom={true} 
-        enableRotate={true}
-        onChange={(e) => {
-          if (e && e.target) {
-            console.log('Camera position:', e.target.object.position.x.toFixed(2), e.target.object.position.y.toFixed(2), e.target.object.position.z.toFixed(2));
-            console.log('Camera zoom:', e.target.getDistance().toFixed(2));
-            console.log('Pan target:', e.target.target.x.toFixed(2), e.target.target.y.toFixed(2), e.target.target.z.toFixed(2));
-          }
-        }}
-      />
     </Canvas>
   );
 }
