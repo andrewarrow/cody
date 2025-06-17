@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import './App.css';
@@ -13,9 +13,12 @@ function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: 
   const [worldPosition, setWorldPosition] = useState<[number, number, number]>([gridPosition[0] * CELL_SIZE, 0.5, gridPosition[1] * CELL_SIZE]);
   const [isFalling, setIsFalling] = useState(false);
   const [fallSpeed, setFallSpeed] = useState(0);
-
+  const [facingDirection, setFacingDirection] = useState(0); // 0=north, 1=east, 2=south, 3=west
 
   const isPositionBlocked = (pos: [number, number]) => {
+    if (pos[0] < 0 || pos[0] >= GRID_SIZE || pos[1] < 0 || pos[1] >= GRID_SIZE) {
+      return true;
+    }
     return obstacles.some(obstacle => obstacle[0] === pos[0] && obstacle[1] === pos[1]);
   };
 
@@ -27,29 +30,23 @@ function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: 
       let moved = false;
       
       switch (event.code) {
-        case 'KeyW':
-          if (currentGridPos[1] > 0) {
-            newGridPos[1] -= 1;
-            moved = true;
-          }
+        case 'ArrowUp': // Move forward in current facing direction
+          const forwardDelta = getFacingDirectionDelta(facingDirection);
+          newGridPos[0] += forwardDelta[0];
+          newGridPos[1] += forwardDelta[1];
+          moved = true;
           break;
-        case 'KeyS':
-          if (currentGridPos[1] < GRID_SIZE - 1) {
-            newGridPos[1] += 1;
-            moved = true;
-          }
+        case 'ArrowDown': // Move backward from current facing direction
+          const backwardDelta = getFacingDirectionDelta(facingDirection);
+          newGridPos[0] -= backwardDelta[0];
+          newGridPos[1] -= backwardDelta[1];
+          moved = true;
           break;
-        case 'KeyA':
-          if (currentGridPos[0] > 0) {
-            newGridPos[0] -= 1;
-            moved = true;
-          }
+        case 'ArrowLeft': // Turn left 90 degrees
+          setFacingDirection(prev => (prev + 3) % 4);
           break;
-        case 'KeyD':
-          if (currentGridPos[0] < GRID_SIZE - 1) {
-            newGridPos[0] += 1;
-            moved = true;
-          }
+        case 'ArrowRight': // Turn right 90 degrees
+          setFacingDirection(prev => (prev + 1) % 4);
           break;
       }
       
@@ -61,7 +58,17 @@ function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentGridPos, isFalling, onMove, obstacles, isPositionBlocked]);
+  }, [currentGridPos, isFalling, onMove, obstacles, facingDirection]);
+
+  const getFacingDirectionDelta = (direction: number): [number, number] => {
+    switch (direction) {
+      case 0: return [0, -1]; // North (negative Z)
+      case 1: return [1, 0];  // East (positive X)
+      case 2: return [0, 1];  // South (positive Z)
+      case 3: return [-1, 0]; // West (negative X)
+      default: return [0, -1];
+    }
+  };
 
   useFrame((state, delta) => {
     const targetX = currentGridPos[0] * CELL_SIZE;
@@ -77,6 +84,7 @@ function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: 
     setWorldPosition(newPosition);
     
     camera.position.set(newX, 0.5, newZ);
+    camera.rotation.y = facingDirection * Math.PI / 2;
   });
 
   return null;
@@ -95,6 +103,10 @@ function RedObstacle({ gridPosition }: { gridPosition: [number, number] }) {
 }
 
 function Grid() {
+  const texture = useLoader(THREE.TextureLoader, './texture.png');
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 4);
+  
   const gridLines = [];
   
   for (let i = 0; i <= GRID_SIZE; i++) {
@@ -115,6 +127,10 @@ function Grid() {
     );
   }
   
+  const wallHeight = 3;
+  const wallThickness = 0.2;
+  const halfGrid = GRID_SIZE * CELL_SIZE / 2;
+  
   return (
     <>
       <mesh position={[0, 0, 0]}>
@@ -122,6 +138,26 @@ function Grid() {
         <meshStandardMaterial color="#222222" />
       </mesh>
       {gridLines}
+      
+      <mesh position={[0, wallHeight/2, halfGrid]}>
+        <boxGeometry args={[GRID_SIZE * CELL_SIZE, wallHeight, wallThickness]} />
+        <meshStandardMaterial map={texture} />
+      </mesh>
+      
+      <mesh position={[0, wallHeight/2, -halfGrid]}>
+        <boxGeometry args={[GRID_SIZE * CELL_SIZE, wallHeight, wallThickness]} />
+        <meshStandardMaterial map={texture} />
+      </mesh>
+      
+      <mesh position={[halfGrid, wallHeight/2, 0]}>
+        <boxGeometry args={[wallThickness, wallHeight, GRID_SIZE * CELL_SIZE]} />
+        <meshStandardMaterial map={texture} />
+      </mesh>
+      
+      <mesh position={[-halfGrid, wallHeight/2, 0]}>
+        <boxGeometry args={[wallThickness, wallHeight, GRID_SIZE * CELL_SIZE]} />
+        <meshStandardMaterial map={texture} />
+      </mesh>
     </>
   );
 }
