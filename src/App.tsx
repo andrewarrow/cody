@@ -7,7 +7,7 @@ import './App.css';
 const GRID_SIZE = 10;
 const CELL_SIZE = 1;
 
-function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void, obstacles: [number, number][] }) {
+function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void, onRotate: (direction: number) => void, obstacles: [number, number][] }) {
   const { camera } = useThree();
   const [currentGridPos, setCurrentGridPos] = useState(gridPosition);
   const [worldPosition, setWorldPosition] = useState<[number, number, number]>([gridPosition[0] * CELL_SIZE, 0.5, gridPosition[1] * CELL_SIZE]);
@@ -43,10 +43,18 @@ function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: 
           moved = true;
           break;
         case 'ArrowLeft': // Turn left 90 degrees
-          setFacingDirection(prev => (prev + 3) % 4);
+          setFacingDirection(prev => {
+            const newDirection = (prev + 3) % 4;
+            onRotate(newDirection);
+            return newDirection;
+          });
           break;
         case 'ArrowRight': // Turn right 90 degrees
-          setFacingDirection(prev => (prev + 1) % 4);
+          setFacingDirection(prev => {
+            const newDirection = (prev + 1) % 4;
+            onRotate(newDirection);
+            return newDirection;
+          });
           break;
       }
       
@@ -58,7 +66,7 @@ function FirstPersonPlayer({ gridPosition, onMove, obstacles }: { gridPosition: 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentGridPos, isFalling, onMove, obstacles, facingDirection]);
+  }, [currentGridPos, isFalling, onMove, onRotate, obstacles, facingDirection]);
 
   const getFacingDirectionDelta = (direction: number): [number, number] => {
     switch (direction) {
@@ -162,8 +170,90 @@ function Grid() {
   );
 }
 
+function MiniMap({ playerPos, playerDirection, obstacles }: { playerPos: [number, number], playerDirection: number, obstacles: [number, number][] }) {
+  const cellSize = 15;
+  const mapSize = GRID_SIZE * cellSize;
+  
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '20px',
+      right: '20px',
+      width: `${mapSize}px`,
+      height: `${mapSize}px`,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      border: '2px solid #fff',
+      borderRadius: '8px',
+      padding: '5px'
+    }}>
+      <svg width={mapSize} height={mapSize} style={{ display: 'block' }}>
+        {/* Grid lines */}
+        {Array.from({ length: GRID_SIZE + 1 }, (_, i) => (
+          <g key={i}>
+            <line
+              x1={i * cellSize}
+              y1={0}
+              x2={i * cellSize}
+              y2={mapSize}
+              stroke="#333"
+              strokeWidth={1}
+            />
+            <line
+              x1={0}
+              y1={i * cellSize}
+              x2={mapSize}
+              y2={i * cellSize}
+              stroke="#333"
+              strokeWidth={1}
+            />
+          </g>
+        ))}
+        
+        {/* Walls */}
+        <rect x={0} y={0} width={mapSize} height={3} fill="#8B4513" />
+        <rect x={0} y={mapSize-3} width={mapSize} height={3} fill="#8B4513" />
+        <rect x={0} y={0} width={3} height={mapSize} fill="#8B4513" />
+        <rect x={mapSize-3} y={0} width={3} height={mapSize} fill="#8B4513" />
+        
+        {/* Obstacles */}
+        {obstacles.map((obstacle, index) => (
+          <rect
+            key={index}
+            x={obstacle[0] * cellSize + 2}
+            y={obstacle[1] * cellSize + 2}
+            width={cellSize - 4}
+            height={cellSize - 4}
+            fill="#ff0000"
+          />
+        ))}
+        
+        {/* Player */}
+        <g>
+          <circle
+            cx={playerPos[0] * cellSize + cellSize / 2}
+            cy={playerPos[1] * cellSize + cellSize / 2}
+            r={6}
+            fill="#00ff00"
+          />
+          {/* Direction indicator */}
+          <line
+            x1={playerPos[0] * cellSize + cellSize / 2}
+            y1={playerPos[1] * cellSize + cellSize / 2}
+            x2={playerPos[0] * cellSize + cellSize / 2 + Math.sin(playerDirection * Math.PI / 2) * 10}
+            y2={playerPos[1] * cellSize + cellSize / 2 - Math.cos(playerDirection * Math.PI / 2) * 10}
+            stroke="#00ff00"
+            strokeWidth={3}
+            strokeLinecap="round"
+          />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 function Game() {
   const [playerGridPos, setPlayerGridPos] = useState<[number, number]>([5, 5]);
+  const [playerDirection, setPlayerDirection] = useState(0);
   
   const obstacles = [
     [2, 3], [7, 1], [4, 6], [8, 8], [1, 7], [6, 2], [3, 9], [9, 4]
@@ -173,20 +263,32 @@ function Game() {
     setPlayerGridPos(newPos);
   };
 
+  const handlePlayerRotate = (direction: number) => {
+    setPlayerDirection(direction);
+  };
+
   return (
-    <Canvas camera={{ position: [5, 0.5, 5], fov: 75 }}>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 10, 10]} intensity={0.8} />
-      
-      <Grid />
-      
-      <FirstPersonPlayer gridPosition={playerGridPos} onMove={handlePlayerMove} obstacles={obstacles} />
-      
-      {obstacles.map((obstaclePos, index) => (
-        <RedObstacle key={index} gridPosition={obstaclePos} />
-      ))}
-      
-    </Canvas>
+    <>
+      <Canvas camera={{ position: [5, 0.5, 5], fov: 75 }}>
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[10, 10, 10]} intensity={0.8} />
+        
+        <Grid />
+        
+        <FirstPersonPlayer 
+          gridPosition={playerGridPos} 
+          onMove={handlePlayerMove} 
+          onRotate={handlePlayerRotate}
+          obstacles={obstacles} 
+        />
+        
+        {obstacles.map((obstaclePos, index) => (
+          <RedObstacle key={index} gridPosition={obstaclePos} />
+        ))}
+        
+      </Canvas>
+      <MiniMap playerPos={playerGridPos} playerDirection={playerDirection} obstacles={obstacles} />
+    </>
   );
 }
 
