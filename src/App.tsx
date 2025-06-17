@@ -20,7 +20,6 @@ function Player({ position, onPositionChange }: { position: [number, number, num
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      console.log('Key down:', event.code);
       switch (event.code) {
         case 'KeyW':
           keys.current.w = true;
@@ -80,19 +79,15 @@ function Player({ position, onPositionChange }: { position: [number, number, num
     let newPosition = [...playerPosition] as [number, number, number];
 
     if (keys.current.w) {
-      console.log('W key pressed - moving forward');
       newPosition[2] -= speed * delta;
     }
     if (keys.current.s) {
-      console.log('S key pressed - moving backward');
       newPosition[2] += speed * delta;
     }
     if (keys.current.a) {
-      console.log('A key pressed - moving left');
       newPosition[0] -= speed * delta;
     }
     if (keys.current.d) {
-      console.log('D key pressed - moving right');
       newPosition[0] += speed * delta;
     }
 
@@ -152,29 +147,14 @@ function Collectible({ position, onCollect }: { position: [number, number, numbe
 }
 
 function GroundShader({ playerPosition }: { playerPosition: [number, number, number] }) {
-  const meshRef = useRef<THREE.Mesh>(null!);
-  
-  console.log('GroundShader received playerPosition:', playerPosition);
-  
-  useFrame(() => {
-    if (meshRef.current && meshRef.current.material) {
-      const material = meshRef.current.material as THREE.ShaderMaterial;
-      console.log('Player position:', playerPosition);
-      console.log('Setting uniform to:', playerPosition[0], playerPosition[1], playerPosition[2]);
-      material.uniforms.playerPos.value.set(playerPosition[0], playerPosition[1], playerPosition[2]);
-      console.log('Uniform value after set:', material.uniforms.playerPos.value);
-    } else {
-      console.log('No mesh or material found');
-    }
-  });
-
   return (
-    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
       <planeGeometry args={[20, 20]} />
       <shaderMaterial
         uniforms={{
-          playerPos: { value: new THREE.Vector3(0, 0, 0) }
+          playerPos: { value: new THREE.Vector3(playerPosition[0], playerPosition[1], playerPosition[2]) }
         }}
+        key={`${playerPosition[0]}-${playerPosition[2]}`}
         vertexShader={`
           varying vec3 vWorldPosition;
           void main() {
@@ -190,22 +170,17 @@ function GroundShader({ playerPosition }: { playerPosition: [number, number, num
             float x = vWorldPosition.x;
             float z = vWorldPosition.z;
             
-            // Create dramatic color based on player position
+            // Ultra simple test: directly map player position to color
             vec3 color = vec3(
-              0.5 + 0.5 * sin(playerPos.x * 2.0),
-              0.5 + 0.5 * sin(playerPos.z * 2.0),
-              0.5 + 0.5 * sin((playerPos.x + playerPos.z) * 1.0)
+              abs(playerPos.x) * 0.5,
+              0.5,
+              abs(playerPos.z) * 0.5
             );
             
-            // Add world position influence
-            color += vec3(
-              0.3 * sin(x * 0.5 + playerPos.x * 3.0),
-              0.3 * sin(z * 0.5 + playerPos.z * 3.0),
-              0.3 * sin((x + z) * 0.3 + (playerPos.x - playerPos.z) * 2.0)
-            );
-            
-            // Clamp to valid range
-            color = clamp(color, 0.0, 1.0);
+            // If position is far from origin, make it bright red
+            if (abs(playerPos.x) > 1.0 || abs(playerPos.z) > 1.0) {
+              color = vec3(1.0, 0.0, 0.0);
+            }
             
             gl_FragColor = vec4(color, 1.0);
           }
@@ -230,7 +205,9 @@ function Game() {
   };
 
   const handlePlayerPositionChange = (pos: [number, number, number]) => {
-    console.log('Player position changed to:', pos);
+    if (Math.abs(pos[0]) > 1 || Math.abs(pos[2]) > 1) {
+      console.log('Position:', pos[0].toFixed(2), pos[2].toFixed(2));
+    }
     setPlayerPosition(pos);
   };
 
