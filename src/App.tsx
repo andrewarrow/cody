@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import './App.css';
 
@@ -161,38 +161,31 @@ function Game() {
   };
 
   return (
-    <>
-      <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, color: 'white', fontSize: '20px' }}>
-        Grid Game - Use WASD to move
-      </div>
-      <div style={{ position: 'absolute', top: 50, left: 20, zIndex: 100, color: 'white', fontSize: '16px' }}>
-        Position: ({playerGridPos[0]}, {playerGridPos[1]})
-      </div>
-      <Canvas camera={{ position: [0, 8, 8], fov: 60 }}>
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[10, 10, 10]} intensity={0.8} />
-        
-        <Grid />
-        
-        <GreenTubePlayer gridPosition={playerGridPos} onMove={handlePlayerMove} />
-        
-        {obstacles.map((obstaclePos, index) => (
-          <RedObstacle key={index} gridPosition={obstaclePos} />
-        ))}
-        
-        <Text
-          position={[0, 3, -6]}
-          fontSize={0.5}
-          color="white"
-          anchorX="center"
-          anchorY="middle"
-        >
-          Grid Game
-        </Text>
-        
-        <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
-      </Canvas>
-    </>
+    <Canvas camera={{ position: [6.51, 1.50, 9.13], fov: 60 }}>
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 10, 10]} intensity={0.8} />
+      
+      <Grid />
+      
+      <GreenTubePlayer gridPosition={playerGridPos} onMove={handlePlayerMove} />
+      
+      {obstacles.map((obstaclePos, index) => (
+        <RedObstacle key={index} gridPosition={obstaclePos} />
+      ))}
+      
+      <OrbitControls 
+        enablePan={true} 
+        enableZoom={true} 
+        enableRotate={true}
+        onChange={(e) => {
+          if (e && e.target) {
+            console.log('Camera position:', e.target.object.position.x.toFixed(2), e.target.object.position.y.toFixed(2), e.target.object.position.z.toFixed(2));
+            console.log('Camera zoom:', e.target.getDistance().toFixed(2));
+            console.log('Pan target:', e.target.target.x.toFixed(2), e.target.target.y.toFixed(2), e.target.target.z.toFixed(2));
+          }
+        }}
+      />
+    </Canvas>
   );
 }
 
