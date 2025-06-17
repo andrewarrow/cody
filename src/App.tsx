@@ -146,6 +146,66 @@ function Collectible({ position, onCollect }: { position: [number, number, numbe
   );
 }
 
+function GroundShader({ playerPosition }: { playerPosition: [number, number, number] }) {
+  const meshRef = useRef<THREE.Mesh>(null!);
+  
+  useFrame(() => {
+    if (meshRef.current && meshRef.current.material) {
+      const material = meshRef.current.material as THREE.ShaderMaterial;
+      material.uniforms.playerPos.value.set(playerPosition[0], playerPosition[1], playerPosition[2]);
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
+      <planeGeometry args={[20, 20]} />
+      <shaderMaterial
+        uniforms={{
+          playerPos: { value: new THREE.Vector3(0, 0, 0) }
+        }}
+        vertexShader={`
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `}
+        fragmentShader={`
+          uniform vec3 playerPos;
+          varying vec3 vWorldPosition;
+          void main() {
+            float x = vWorldPosition.x;
+            float z = vWorldPosition.z;
+            
+            // Create color based on world position and player position
+            vec3 color = vec3(
+              0.5 + 0.5 * sin(x * 0.3 + playerPos.x * 0.5),
+              0.5 + 0.5 * sin(z * 0.3 + playerPos.z * 0.5),
+              0.5 + 0.5 * sin((x + z) * 0.2 + (playerPos.x + playerPos.z) * 0.3)
+            );
+            
+            // Add some variation based on distance from player
+            float distanceFromPlayer = length(vec2(x - playerPos.x, z - playerPos.z));
+            float influence = exp(-distanceFromPlayer * 0.1);
+            
+            // Mix in player influence colors
+            vec3 playerColor = vec3(
+              0.8 + 0.2 * sin(playerPos.x * 2.0),
+              0.2 + 0.8 * sin(playerPos.z * 2.0),
+              0.5 + 0.5 * cos(playerPos.x * playerPos.z * 0.1)
+            );
+            
+            color = mix(color, playerColor, influence * 0.5);
+            
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `}
+      />
+    </mesh>
+  );
+}
+
 function Game() {
   const [score, setScore] = useState(0);
   const [playerPosition, setPlayerPosition] = useState<[number, number, number]>([0, 0, 0]);
@@ -179,55 +239,7 @@ function Game() {
           />
         ))}
         
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
-          <planeGeometry args={[20, 20]} />
-          <shaderMaterial
-            uniforms={{
-              playerPos: { value: new THREE.Vector3(playerPosition[0], playerPosition[1], playerPosition[2]) }
-            }}
-            vertexShader={`
-              varying vec3 vWorldPosition;
-              void main() {
-                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-                vWorldPosition = worldPosition.xyz;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              }
-            `}
-            fragmentShader={`
-              uniform vec3 playerPos;
-              varying vec3 vWorldPosition;
-              void main() {
-                float x = vWorldPosition.x;
-                float z = vWorldPosition.z;
-                
-                // Calculate distance from player position
-                float distanceFromPlayer = length(vec2(x - playerPos.x, z - playerPos.z));
-                
-                // Create color based on player position and distance
-                float playerInfluence = 1.0 / (1.0 + distanceFromPlayer * 0.2);
-                
-                // Base colors that shift based on player position
-                vec3 baseColor = vec3(
-                  0.5 + 0.5 * sin(playerPos.x * 0.5),
-                  0.5 + 0.5 * sin(playerPos.z * 0.5 + 2.0),
-                  0.5 + 0.5 * sin((playerPos.x + playerPos.z) * 0.3 + 4.0)
-                );
-                
-                // Distance-based color variation
-                vec3 distanceColor = vec3(
-                  0.3 + 0.7 * sin(distanceFromPlayer * 0.1),
-                  0.3 + 0.7 * cos(distanceFromPlayer * 0.15),
-                  0.3 + 0.7 * sin(distanceFromPlayer * 0.12 + 1.5)
-                );
-                
-                // Mix colors based on player influence
-                vec3 finalColor = mix(distanceColor, baseColor, playerInfluence);
-                
-                gl_FragColor = vec4(finalColor, 1.0);
-              }
-            `}
-          />
-        </mesh>
+        <GroundShader playerPosition={playerPosition} />
         
         <Text
           position={[0, 3, -2]}
