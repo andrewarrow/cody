@@ -10,7 +10,14 @@ const CELL_SIZE = 1;
 function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { gridPosition: [number, number], onMove: (pos: [number, number]) => void, onRotate: (direction: number) => void, obstacles: [number, number][] }) {
   const { camera } = useThree();
   const [currentGridPos, setCurrentGridPos] = useState(gridPosition);
-  const [worldPosition, setWorldPosition] = useState<[number, number, number]>([gridPosition[0] * CELL_SIZE, 0.5, gridPosition[1] * CELL_SIZE]);
+  
+  const gridToWorld = (gridPos: [number, number]): [number, number, number] => {
+    const worldX = (gridPos[0] - (GRID_SIZE - 1) / 2) * CELL_SIZE;
+    const worldZ = (gridPos[1] - (GRID_SIZE - 1) / 2) * CELL_SIZE;
+    return [worldX, 0.5, worldZ];
+  };
+  
+  const [worldPosition, setWorldPosition] = useState<[number, number, number]>(gridToWorld(gridPosition));
   const [isFalling, setIsFalling] = useState(false);
   const [fallSpeed, setFallSpeed] = useState(0);
   const [facingDirection, setFacingDirection] = useState(0); // 0=north, 1=east, 2=south, 3=west
@@ -79,8 +86,7 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
   };
 
   useFrame((state, delta) => {
-    const targetX = currentGridPos[0] * CELL_SIZE;
-    const targetZ = currentGridPos[1] * CELL_SIZE;
+    const [targetX, , targetZ] = gridToWorld(currentGridPos);
     const currentX = worldPosition[0];
     const currentZ = worldPosition[2];
     
@@ -99,8 +105,8 @@ function FirstPersonPlayer({ gridPosition, onMove, onRotate, obstacles }: { grid
 }
 
 function RedObstacle({ gridPosition }: { gridPosition: [number, number] }) {
-  const worldX = gridPosition[0] * CELL_SIZE;
-  const worldZ = gridPosition[1] * CELL_SIZE;
+  const worldX = (gridPosition[0] - (GRID_SIZE - 1) / 2) * CELL_SIZE;
+  const worldZ = (gridPosition[1] - (GRID_SIZE - 1) / 2) * CELL_SIZE;
   
   return (
     <mesh position={[worldX, 0.25, worldZ]}>
