@@ -170,17 +170,19 @@ function GroundShader({ playerPosition }: { playerPosition: [number, number, num
             float x = vWorldPosition.x;
             float z = vWorldPosition.z;
             
-            // Ultra simple test: directly map player position to color
+            // Smooth gradient based on player position
             vec3 color = vec3(
-              abs(playerPos.x) * 0.5,
-              0.5,
-              abs(playerPos.z) * 0.5
+              0.5 + 0.5 * sin(playerPos.x * 3.14159),
+              0.5 + 0.5 * sin(playerPos.z * 3.14159 + 2.0),
+              0.5 + 0.5 * sin((playerPos.x + playerPos.z) * 1.57079)
             );
             
-            // If position is far from origin, make it bright red
-            if (abs(playerPos.x) > 1.0 || abs(playerPos.z) > 1.0) {
-              color = vec3(1.0, 0.0, 0.0);
-            }
+            // Add world position influence for more variation
+            float worldInfluence = sin(x * 0.5 + playerPos.x * 5.0) * cos(z * 0.5 + playerPos.z * 5.0);
+            color += vec3(worldInfluence * 0.3, worldInfluence * 0.2, worldInfluence * 0.4);
+            
+            // Ensure colors stay in valid range
+            color = clamp(color, 0.0, 1.0);
             
             gl_FragColor = vec4(color, 1.0);
           }
